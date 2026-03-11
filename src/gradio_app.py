@@ -1883,8 +1883,7 @@ def create_interface():
                         chatbot = gr.Chatbot(
                             label="Konversation",
                             height=500,
-                            show_label=True,
-                            type="messages"  # Nutze Messages-Format (OpenAI-style)
+                            show_label=True
                         )
 
                         # Status-Zeile

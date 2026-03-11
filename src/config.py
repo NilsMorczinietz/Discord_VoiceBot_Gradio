@@ -22,12 +22,25 @@ class Config:
         Args:
             env_file: Pfad zur .env Datei
         """
-        # .env Datei laden
-        if env_file and Path(env_file).exists():
-            load_dotenv(env_file)
-            logger.info(f"Konfiguration geladen aus: {env_file}")
+        # .env Datei laden - prüfe mehrere Orte
+        env_path = None
+        search_paths = [
+            Path(env_file),  # Aktuelles Verzeichnis
+            Path.cwd() / env_file,  # Explizit aktuelles Verzeichnis
+            Path.cwd().parent / env_file,  # Übergeordnetes Verzeichnis (Projektroot)
+            Path(__file__).parent.parent / env_file,  # Relative zum Script
+        ]
+        
+        for path in search_paths:
+            if path.exists():
+                env_path = path
+                break
+        
+        if env_path:
+            load_dotenv(env_path)
+            logger.info(f"Konfiguration geladen aus: {env_path}")
         else:
-            logger.warning(f".env Datei nicht gefunden: {env_file}")
+            logger.warning(f".env Datei nicht gefunden. Gesucht in: {[str(p) for p in search_paths]}")
 
         # Discord Konfiguration
         self.discord_token = self._get_env("DISCORD_TOKEN", required=True)

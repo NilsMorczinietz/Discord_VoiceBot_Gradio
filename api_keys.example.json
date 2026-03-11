@@ -1,0 +1,19 @@
+{
+  "keys": {
+    "sk-admin-xyz789": {
+      "name": "Admin",
+      "role": "admin",
+      "active": true
+    },
+    "sk-user-alice-abc123": {
+      "name": "Alice",
+      "role": "writer",
+      "active": true
+    },
+    "sk-user-bob-def456": {
+      "name": "Bob",
+      "role": "reader",
+      "active": true
+    }
+  }
+}
