@@ -300,8 +300,24 @@ class DiscordBotGradio:
                     return content if content else "Befehl ausgefuehrt."
 
                 # Assistant-Msg mit tool_calls anhaengen
+                # WICHTIG: Fuer Ollama muessen die arguments als dict bleiben, nicht als JSON string
                 assistant_msg = {"role": "assistant", "content": response.get("content")}
-                assistant_msg["tool_calls"] = tool_calls
+                if self.gemini.llm_client.api_choice == "ollama":
+                    # Convert arguments back to dict for Ollama
+                    tool_calls_for_ollama = []
+                    for tc in tool_calls:
+                        tc_copy = tc.copy()
+                        tc_copy["function"] = tc["function"].copy()
+                        args = tc["function"]["arguments"]
+                        if isinstance(args, str):
+                            try:
+                                tc_copy["function"]["arguments"] = json.loads(args)
+                            except json.JSONDecodeError:
+                                tc_copy["function"]["arguments"] = {}
+                        tool_calls_for_ollama.append(tc_copy)
+                    assistant_msg["tool_calls"] = tool_calls_for_ollama
+                else:
+                    assistant_msg["tool_calls"] = tool_calls
                 messages.append(assistant_msg)
 
                 # Jeden Tool-Call einzeln ausfuehren
