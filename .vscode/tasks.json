@@ -1,0 +1,15 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Gradio App",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"src/gradio_app.py"
+			],
+			"group": "build",
+			"problemMatcher": []
+		}
+	]
+}
