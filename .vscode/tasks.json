@@ -10,6 +10,22 @@
 			],
 			"group": "build",
 			"problemMatcher": []
+		},
+		{
+			"label": "Run Pytest (PYTHONPATH=src)",
+			"type": "shell",
+			"command": ".venv\\Scripts\\python.exe",
+			"args": [
+				"-m",
+				"pytest"
+			],
+			"options": {
+				"env": {
+					"PYTHONPATH": "src"
+				}
+			},
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }

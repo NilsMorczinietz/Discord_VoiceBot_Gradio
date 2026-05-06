@@ -3,3 +3,7 @@
 .env
 *.log
 .venv
+venv
+__pycache__
+.pytest_cache
+audit_log.db
