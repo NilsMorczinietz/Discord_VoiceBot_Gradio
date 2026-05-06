@@ -1822,6 +1822,117 @@ def refresh_calendar_with_reload(year: int, month: int) -> str:
     return load_calendar_sync(year, month)
 
 
+def _build_date_from_day(year: int, month: int, day_value) -> str:
+    """Erzeugt ein ISO-Datum aus Jahr/Monat/Tag."""
+    try:
+        day_int = int(day_value)
+        return datetime(year, month, day_int).strftime("%Y-%m-%d")
+    except Exception:
+        return ""
+
+
+def set_event_date_from_day(year: int, month: int, day_value) -> str:
+    """Setzt das Datum-Feld aus der Tageszahl."""
+    return _build_date_from_day(year, month, day_value)
+
+
+def _calculate_duration_hours(start_time: str, end_time: str) -> float:
+    """Berechnet Dauer in Stunden aus HH:MM Start/Ende."""
+    start_dt = datetime.strptime(start_time, "%H:%M")
+    end_dt = datetime.strptime(end_time, "%H:%M")
+    if end_dt <= start_dt:
+        raise ValueError("Endzeit muss nach der Startzeit liegen")
+    delta = end_dt - start_dt
+    return round(delta.total_seconds() / 3600, 2)
+
+
+def create_event_from_calendar(
+    name: str,
+    date_str: str,
+    time_str: str,
+    end_time_str: str,
+    location: str,
+    description: str,
+    day_value,
+    year: int,
+    month: int
+) -> tuple:
+    """Erstellt ein Event ueber Formular und aktualisiert den Kalender."""
+    if not bot.is_initialized or not bot.config:
+        return "[FEHLER] Bot nicht initialisiert.", load_calendar_sync(year, month)
+
+    name = (name or "").strip()
+    date_str = (date_str or "").strip()
+    time_str = (time_str or "").strip()
+    end_time_str = (end_time_str or "").strip()
+    description = (description or "").strip()
+    location = (location or "Raum 1.242").strip() or "Raum 1.242"
+    event_type = "online"
+
+    if not name:
+        return "[FEHLER] Bitte einen Titel angeben.", load_calendar_sync(year, month)
+
+    if not date_str:
+        date_str = _build_date_from_day(year, month, day_value)
+
+    if not date_str:
+        return "[FEHLER] Bitte Datum angeben.", load_calendar_sync(year, month)
+
+    if not time_str:
+        time_str = "18:00"
+
+    if not end_time_str:
+        end_time_str = "19:00"
+
+    start_time = f"{date_str} {time_str}"
+    try:
+        duration_hours = _calculate_duration_hours(time_str, end_time_str)
+    except Exception as e:
+        return f"[FEHLER] {str(e)}", load_calendar_sync(year, month)
+
+    try:
+        if bot.config.mcp_mode == "remote":
+            async def _call_remote():
+                return await bot.mcp_client.client.call_tool(
+                    "create_event",
+                    arguments={
+                        "name": name,
+                        "start_time": start_time,
+                        "description": description,
+                        "duration_hours": duration_hours,
+                        "location": location,
+                        "event_type": event_type
+                    }
+                )
+
+            mcp_result = bot._run_async(_call_remote())
+            result = bot._parse_mcp_result(mcp_result)
+        else:
+            if not bot.helper:
+                return "[FEHLER] Helper nicht verfuegbar.", load_calendar_sync(year, month)
+            result = bot._run_async(
+                bot.helper.create_event(
+                    name=name,
+                    start_time=start_time,
+                    description=description,
+                    duration_hours=duration_hours,
+                    location=location,
+                    event_type=event_type
+                )
+            )
+
+        if isinstance(result, dict) and result.get("success"):
+            msg = f"[OK] Event erstellt: {result.get('event_name', name)}"
+            event_cache.last_fetch = None
+            return msg, load_calendar_sync(year, month)
+
+        return "[FEHLER] Event konnte nicht erstellt werden.", load_calendar_sync(year, month)
+
+    except Exception as e:
+        logger.error(f"Fehler beim Erstellen des Events: {e}", exc_info=True)
+        return f"[FEHLER] {str(e)}", load_calendar_sync(year, month)
+
+
 def navigate_calendar(year: int, month: int, direction: str) -> tuple:
     """Navigiert im Kalender (vor/zurück)"""
     if direction == "prev":
@@ -1972,15 +2083,60 @@ def create_interface():
                 next_btn = gr.Button("Nächster Monat >", size="sm")
                 refresh_btn = gr.Button("Aktualisieren", variant="secondary", size="sm")
 
-            # Kalender-Anzeige
-            calendar_html = gr.HTML(
-                value="<p>Kalender wird geladen...</p>",
-                label="Kalender"
-            )
+            with gr.Row():
+                with gr.Column(scale=3):
+                    # Kalender-Anzeige
+                    calendar_html = gr.HTML(
+                        value="<p>Kalender wird geladen...</p>",
+                        label="Kalender"
+                    )
 
-            # Event-Liste für ausgewählten Monat
-            gr.Markdown("---")
-            gr.Markdown("*Hover über Events für Details. Events werden in Discord-Blau angezeigt.*")
+                    # Event-Liste für ausgewählten Monat
+                    gr.Markdown("---")
+                    gr.Markdown("*Hover über Events für Details. Events werden in Discord-Blau angezeigt.*")
+
+                with gr.Column(scale=1):
+                    gr.Markdown("### Event erstellen")
+                    gr.Markdown("*Tag eingeben oder Datum direkt setzen.*")
+
+                    day_input = gr.Number(
+                        label="Tag im Monat",
+                        value=today.day,
+                        precision=0
+                    )
+                    set_date_btn = gr.Button("Datum setzen", size="sm", variant="secondary")
+
+                    event_date = gr.Textbox(
+                        label="Datum (YYYY-MM-DD)",
+                        placeholder="2025-12-01",
+                        value=today.strftime("%Y-%m-%d")
+                    )
+                    event_time = gr.Textbox(
+                        label="Uhrzeit (HH:MM)",
+                        value="18:00"
+                    )
+                    event_end_time = gr.Textbox(
+                        label="Ende (HH:MM)",
+                        value="19:00"
+                    )
+                    event_name = gr.Textbox(
+                        label="Titel",
+                        placeholder="z.B. Team-Meeting"
+                    )
+                    event_location = gr.Textbox(
+                        label="Ort",
+                        value="Raum 1.242"
+                    )
+                    event_description = gr.Textbox(
+                        label="Beschreibung",
+                        lines=3
+                    )
+                    create_event_btn = gr.Button("Event erstellen", variant="primary", size="sm")
+                    create_event_status = gr.Textbox(
+                        label="Event-Status",
+                        interactive=False,
+                        lines=2
+                    )
 
         # === EINSTELLUNGEN ===
         with gr.Column(visible=False) as settings_col:
@@ -2294,6 +2450,28 @@ def create_interface():
             fn=refresh_calendar_with_reload,
             inputs=[calendar_year, calendar_month],
             outputs=[calendar_html]
+        )
+
+        set_date_btn.click(
+            fn=set_event_date_from_day,
+            inputs=[calendar_year, calendar_month, day_input],
+            outputs=[event_date]
+        )
+
+        create_event_btn.click(
+            fn=create_event_from_calendar,
+            inputs=[
+                event_name,
+                event_date,
+                event_time,
+                event_end_time,
+                event_location,
+                event_description,
+                day_input,
+                calendar_year,
+                calendar_month
+            ],
+            outputs=[create_event_status, calendar_html]
         )
 
         # Kalender beim Start laden
