@@ -1859,6 +1859,13 @@ def create_interface():
 
     with gr.Blocks(title="Discord Voice Bot", theme=theme) as demo:
         gr.Markdown("# Discord Voice Bot")
+        gr.HTML(
+            "<style>"
+            ".nav-row{justify-content:flex-start;}"
+            ".nav-button{max-width:140px;}"
+            ".nav-button button{min-height:32px;padding:4px 12px;width:120px;}"
+            "</style>"
+        )
 
         # Session State für geräte-spezifischen Chat-Verlauf
         chat_state = gr.State([])
@@ -1867,250 +1874,254 @@ def create_interface():
         calendar_year = gr.State(initial_year)
         calendar_month = gr.State(initial_month)
 
-        # Browser State für API-Keys (wird im LocalStorage des Browsers gespeichert)
-        # Jeder Benutzer hat seine eigenen Keys, die nach Refresh erhalten bleiben
-        saved_api_keys = gr.BrowserState(
-            default_value={"openai": "", "groq": "", "gemini": ""},
-            storage_key="discord_bot_api_keys"
-        )
+        # Session State fuer API-Keys (kein LocalStorage, vermeidet Browser-Storage-Probleme)
+        saved_api_keys = gr.State({"openai": "", "groq": "", "gemini": ""})
 
-        with gr.Tabs():
-            # === TAB 1: CHAT ===
-            with gr.TabItem("Chat"):
-                with gr.Row():
-                    with gr.Column(scale=3):
-                        # Chat-Display
-                        chatbot = gr.Chatbot(
-                            label="Konversation",
-                            height=500,
-                            show_label=True
-                        )
+        # Navigation statt Tabs (vermeidet Frontend-Tab-Fehler)
+        current_tab = gr.State("chat")
 
-                        # Status-Zeile
-                        status = gr.Textbox(
-                            label="Status",
-                            interactive=False,
-                            value=init_status if bot.is_initialized else "[FEHLER] Initialisierung fehlgeschlagen"
-                        )
+        with gr.Row(elem_classes=["nav-row"]):
+            nav_chat = gr.Button("Chat", variant="primary", size="sm", elem_classes=["nav-button"])
+            nav_calendar = gr.Button("Kalender", variant="secondary", size="sm", elem_classes=["nav-button"])
+            nav_settings = gr.Button("Einstellungen", variant="secondary", size="sm", elem_classes=["nav-button"])
+            nav_tutorial = gr.Button("Tutorial", variant="secondary", size="sm", elem_classes=["nav-button"])
 
-                    with gr.Column(scale=1):
-                        # LLM-Modell Auswahl
-                        gr.Markdown("### LLM Modell")
-                        llm_dropdown = gr.Dropdown(
-                            choices=get_validated_models(),
-                            value=get_validated_models()[0] if get_validated_models() else None,
-                            label="Aktives Modell",
-                            interactive=True
-                        )
-                        llm_status = gr.Textbox(
-                            label="LLM Status",
-                            value=get_current_llm_info(),
-                            interactive=False,
-                            lines=2
-                        )
+        # === CHAT ===
+        with gr.Column(visible=True) as chat_col:
+            with gr.Row():
+                with gr.Column(scale=3):
+                    # Chat-Display
+                    chatbot = gr.Chatbot(
+                        label="Konversation",
+                        height=500,
+                        show_label=True
+                    )
 
-                        gr.Markdown("---")
+                    # Status-Zeile
+                    status = gr.Textbox(
+                        label="Status",
+                        interactive=False,
+                        value=init_status if bot.is_initialized else "[FEHLER] Initialisierung fehlgeschlagen"
+                    )
 
-                        # Audio-Eingabe
-                        gr.Markdown("### Spracheingabe")
-                        audio_input = gr.Audio(
-                            sources=["microphone"],
-                            type="filepath",
-                            label="Audio aufnehmen"
-                        )
-                        gr.Markdown("*Transkription erscheint automatisch im Chat*")
-                        audio_btn = gr.Button("Audio verarbeiten", variant="secondary")
+                with gr.Column(scale=1):
+                    # LLM-Modell Auswahl
+                    gr.Markdown("### LLM Modell")
+                    llm_dropdown = gr.Dropdown(
+                        choices=get_validated_models(),
+                        value=get_validated_models()[0] if get_validated_models() else None,
+                        label="Aktives Modell",
+                        interactive=True
+                    )
+                    llm_status = gr.Textbox(
+                        label="LLM Status",
+                        value=get_current_llm_info(),
+                        interactive=False,
+                        lines=2
+                    )
 
-                        gr.Markdown("---")
+                    gr.Markdown("---")
 
-                        # Text-Eingabe
-                        gr.Markdown("### Texteingabe")
-                        text_input = gr.Textbox(
-                            label="Befehl",
-                            placeholder="z.B. Zeige mir alle Events...",
-                            lines=3
-                        )
-                        text_btn = gr.Button("Text senden", variant="secondary")
+                    # Audio-Eingabe
+                    gr.Markdown("### Spracheingabe")
+                    audio_input = gr.Audio(
+                        sources=["microphone"],
+                        type="filepath",
+                        label="Audio aufnehmen"
+                    )
+                    gr.Markdown("*Transkription erscheint automatisch im Chat*")
+                    audio_btn = gr.Button("Audio verarbeiten", variant="secondary")
 
-                # Beispiele
-                gr.Markdown("---")
-                gr.Markdown("### Beispiel-Befehle")
-                gr.Examples(
-                    examples=[
-                        ["Zeige mir alle Events in den nächsten 7 Tagen"],
-                        ["Erstelle das Event mit dem Titel Schulung morgen um 15 Uhr für 2 Stunden"],
-                        ["Welche Events sind morgen im Labor X"],
-                        ["Lösche Event Meeting"],
-                        ["Liste alle Channels auf."],
-                        ["Sende Nachricht Hallo Team in allgemein"],
-                        ["Lösche die letzte Nachricht in allgemein"],
-                        ["Zeige Events vom 1. Dezember bis 29. Dezember"]
-                    ],
-                    inputs=[text_input]
-                )
+                    gr.Markdown("---")
 
-            # === TAB 2: KALENDER ===
-            with gr.TabItem("Kalender"):
-                gr.Markdown("### Event-Kalender")
-                gr.Markdown("*Alle Discord-Events auf einen Blick*")
+                    # Text-Eingabe
+                    gr.Markdown("### Texteingabe")
+                    text_input = gr.Textbox(
+                        label="Befehl",
+                        placeholder="z.B. Zeige mir alle Events...",
+                        lines=3
+                    )
+                    text_btn = gr.Button("Text senden", variant="secondary")
 
-                # Navigation
-                with gr.Row():
-                    prev_btn = gr.Button("< Vorheriger Monat", size="sm")
-                    today_btn = gr.Button("Heute", variant="primary", size="sm")
-                    next_btn = gr.Button("Nächster Monat >", size="sm")
-                    refresh_btn = gr.Button("Aktualisieren", variant="secondary", size="sm")
+            # Beispiele
+            gr.Markdown("---")
+            gr.Markdown("### Beispiel-Befehle")
+            gr.Examples(
+                examples=[
+                    ["Zeige mir alle Events in den nächsten 7 Tagen"],
+                    ["Erstelle das Event mit dem Titel Schulung morgen um 15 Uhr für 2 Stunden"],
+                    ["Welche Events sind morgen im Labor X"],
+                    ["Lösche Event Meeting"],
+                    ["Liste alle Channels auf."],
+                    ["Sende Nachricht Hallo Team in allgemein"],
+                    ["Lösche die letzte Nachricht in allgemein"],
+                    ["Zeige Events vom 1. Dezember bis 29. Dezember"]
+                ],
+                inputs=[text_input]
+            )
 
-                # Kalender-Anzeige
-                calendar_html = gr.HTML(
-                    value="<p>Kalender wird geladen...</p>",
-                    label="Kalender"
-                )
+        # === KALENDER ===
+        with gr.Column(visible=False) as calendar_col:
+            gr.Markdown("### Event-Kalender")
+            gr.Markdown("*Alle Discord-Events auf einen Blick*")
 
-                # Event-Liste für ausgewählten Monat
-                gr.Markdown("---")
-                gr.Markdown("*Hover über Events für Details. Events werden in Discord-Blau angezeigt.*")
+            # Navigation
+            with gr.Row():
+                prev_btn = gr.Button("< Vorheriger Monat", size="sm")
+                today_btn = gr.Button("Heute", variant="primary", size="sm")
+                next_btn = gr.Button("Nächster Monat >", size="sm")
+                refresh_btn = gr.Button("Aktualisieren", variant="secondary", size="sm")
 
-            # === TAB 3: EINSTELLUNGEN ===
-            with gr.TabItem("Einstellungen"):
-                gr.Markdown("### LLM Provider Konfiguration")
-                gr.Markdown("*Gib deine API Keys ein und validiere sie. Nach der Validierung kannst du auswählen, welche Modelle im Dropdown erscheinen sollen.*")
+            # Kalender-Anzeige
+            calendar_html = gr.HTML(
+                value="<p>Kalender wird geladen...</p>",
+                label="Kalender"
+            )
 
-                with gr.Row():
-                    # OpenAI
-                    with gr.Column():
-                        gr.Markdown("#### OpenAI")
-                        openai_key_input = gr.Textbox(
-                            label="API Key",
-                            placeholder="sk-...",
-                            type="password",
-                            lines=1
-                        )
-                        openai_validate_btn = gr.Button("Validieren", variant="secondary", size="sm")
-                        openai_status = gr.Textbox(
-                            label="Status",
-                            value="Nicht validiert",
-                            interactive=False,
-                            lines=2
-                        )
-                        openai_models_group = gr.CheckboxGroup(
-                            choices=[],
-                            label="Modelle für Dropdown auswählen",
-                            value=[],
-                            visible=False
-                        )
+            # Event-Liste für ausgewählten Monat
+            gr.Markdown("---")
+            gr.Markdown("*Hover über Events für Details. Events werden in Discord-Blau angezeigt.*")
 
-                    # Groq
-                    with gr.Column():
-                        gr.Markdown("#### Groq")
-                        groq_key_input = gr.Textbox(
-                            label="API Key",
-                            placeholder="gsk_...",
-                            type="password",
-                            lines=1
-                        )
-                        groq_validate_btn = gr.Button("Validieren", variant="secondary", size="sm")
-                        groq_status = gr.Textbox(
-                            label="Status",
-                            value="Nicht validiert",
-                            interactive=False,
-                            lines=2
-                        )
-                        groq_models_group = gr.CheckboxGroup(
-                            choices=[],
-                            label="Modelle für Dropdown auswählen",
-                            value=[],
-                            visible=False
-                        )
+        # === EINSTELLUNGEN ===
+        with gr.Column(visible=False) as settings_col:
+            gr.Markdown("### LLM Provider Konfiguration")
+            gr.Markdown("*Gib deine API Keys ein und validiere sie. Nach der Validierung kannst du auswählen, welche Modelle im Dropdown erscheinen sollen.*")
 
-                    # Gemini
-                    with gr.Column():
-                        gr.Markdown("#### Google Gemini")
-                        gemini_key_input = gr.Textbox(
-                            label="API Key",
-                            placeholder="AIza...",
-                            type="password",
-                            lines=1
-                        )
-                        gemini_validate_btn = gr.Button("Validieren", variant="secondary", size="sm")
-                        gemini_status = gr.Textbox(
-                            label="Status",
-                            value="Nicht validiert",
-                            interactive=False,
-                            lines=2
-                        )
-                        gemini_models_group = gr.CheckboxGroup(
-                            choices=[],
-                            label="Modelle für Dropdown auswählen",
-                            value=[],
-                            visible=False
-                        )
+            with gr.Row():
+                # OpenAI
+                with gr.Column():
+                    gr.Markdown("#### OpenAI")
+                    openai_key_input = gr.Textbox(
+                        label="API Key",
+                        placeholder="sk-...",
+                        type="password",
+                        lines=1
+                    )
+                    openai_validate_btn = gr.Button("Validieren", variant="secondary", size="sm")
+                    openai_status = gr.Textbox(
+                        label="Status",
+                        value="Nicht validiert",
+                        interactive=False,
+                        lines=2
+                    )
+                    openai_models_group = gr.CheckboxGroup(
+                        choices=[],
+                        label="Modelle für Dropdown auswählen",
+                        value=[],
+                        visible=False
+                    )
 
-                gr.Markdown("---")
+                # Groq
+                with gr.Column():
+                    gr.Markdown("#### Groq")
+                    groq_key_input = gr.Textbox(
+                        label="API Key",
+                        placeholder="gsk_...",
+                        type="password",
+                        lines=1
+                    )
+                    groq_validate_btn = gr.Button("Validieren", variant="secondary", size="sm")
+                    groq_status = gr.Textbox(
+                        label="Status",
+                        value="Nicht validiert",
+                        interactive=False,
+                        lines=2
+                    )
+                    groq_models_group = gr.CheckboxGroup(
+                        choices=[],
+                        label="Modelle für Dropdown auswählen",
+                        value=[],
+                        visible=False
+                    )
 
-                # Ollama (Lokal)
-                gr.Markdown("### Lokale Modelle (Ollama)")
-                gr.Markdown("*Ollama ermöglicht das Ausführen von LLMs lokal ohne API Key.*")
+                # Gemini
+                with gr.Column():
+                    gr.Markdown("#### Google Gemini")
+                    gemini_key_input = gr.Textbox(
+                        label="API Key",
+                        placeholder="AIza...",
+                        type="password",
+                        lines=1
+                    )
+                    gemini_validate_btn = gr.Button("Validieren", variant="secondary", size="sm")
+                    gemini_status = gr.Textbox(
+                        label="Status",
+                        value="Nicht validiert",
+                        interactive=False,
+                        lines=2
+                    )
+                    gemini_models_group = gr.CheckboxGroup(
+                        choices=[],
+                        label="Modelle für Dropdown auswählen",
+                        value=[],
+                        visible=False
+                    )
 
-                with gr.Row():
-                    with gr.Column(scale=2):
-                        ollama_status = gr.Textbox(
-                            label="Ollama Status",
-                            value=get_ollama_status(),
-                            interactive=False,
-                            lines=1
-                        )
-                    with gr.Column(scale=1):
-                        ollama_refresh_btn = gr.Button("🔄 Aktualisieren", variant="secondary", size="sm")
+            gr.Markdown("---")
 
-                # Ollama Modellauswahl
-                ollama_models_group = gr.CheckboxGroup(
-                    choices=[f"{m} [lokal/free]" for m in _ollama_models] if _ollama_models else [],
-                    label="Modelle für Dropdown auswählen",
-                    value=[f"{m} [lokal/free]" for m in _ollama_models[:3]] if _ollama_models else [],  # Erste 3 vorausgewählt
-                    visible=_ollama_available and len(_ollama_models) > 0
-                )
+            # Ollama (Lokal)
+            gr.Markdown("### Lokale Modelle (Ollama)")
+            gr.Markdown("*Ollama ermöglicht das Ausführen von LLMs lokal ohne API Key.*")
 
-                gr.Markdown("*Tipp: Installiere Modelle mit `ollama pull llama3.2` oder `ollama pull mistral`*")
+            with gr.Row():
+                with gr.Column(scale=2):
+                    ollama_status = gr.Textbox(
+                        label="Ollama Status",
+                        value=get_ollama_status(),
+                        interactive=False,
+                        lines=1
+                    )
+                with gr.Column(scale=1):
+                    ollama_refresh_btn = gr.Button("🔄 Aktualisieren", variant="secondary", size="sm")
 
-                gr.Markdown("---")
+            # Ollama Modellauswahl
+            ollama_models_group = gr.CheckboxGroup(
+                choices=[f"{m} [lokal/free]" for m in _ollama_models] if _ollama_models else [],
+                label="Modelle für Dropdown auswählen",
+                value=[f"{m} [lokal/free]" for m in _ollama_models[:3]] if _ollama_models else [],
+                visible=_ollama_available and len(_ollama_models) > 0
+            )
 
-                # Preisdaten-Sektion
-                gr.Markdown("### Modellpreise")
-                gr.Markdown("*Preise werden von [LiteLLM](https://github.com/BerriAI/litellm) geladen (Input/Output pro 1M Tokens)*")
+            gr.Markdown("*Tipp: Installiere Modelle mit `ollama pull llama3.2` oder `ollama pull mistral`*")
 
-                with gr.Row():
-                    with gr.Column(scale=2):
-                        prices_status = gr.Textbox(
-                            label="Preisdaten Status",
-                            value=get_prices_status(),
-                            interactive=False,
-                            lines=1
-                        )
-                    with gr.Column(scale=1):
-                        prices_refresh_btn = gr.Button("Preise aktualisieren", variant="secondary", size="sm")
+            gr.Markdown("---")
 
-                gr.Markdown("---")
-                gr.Markdown("### Hinweise")
-                gr.Markdown("""
-                - Nach erfolgreicher Validierung erscheinen die Modelle im Dropdown auf dem Chat-Tab
-                - API Keys werden nur im Speicher gehalten (nicht gespeichert)
-                - Der aktuelle Provider aus der `.env` Datei ist immer verfügbar
-                - Validierung testet den Key mit einer kleinen Anfrage
-                - **Ollama** wird automatisch erkannt wenn es läuft (kein API Key nötig)
-                - **Preise** werden beim Start automatisch von LiteLLM geladen
-                """)
+            # Preisdaten-Sektion
+            gr.Markdown("### Modellpreise")
+            gr.Markdown("*Preise werden von [LiteLLM](https://github.com/BerriAI/litellm) geladen (Input/Output pro 1M Tokens)*")
 
-            # === TAB 4: TUTORIAL ===
-            with gr.TabItem("Tutorial"):
-                gr.Markdown("### Anleitung")
-                gr.Markdown("Diese App ermoeglicht die sprachbasierte Interaktion mit Discord ueber einen MCP Server.")
+            with gr.Row():
+                with gr.Column(scale=2):
+                    prices_status = gr.Textbox(
+                        label="Preisdaten Status",
+                        value=get_prices_status(),
+                        interactive=False,
+                        lines=1
+                    )
+                with gr.Column(scale=1):
+                    prices_refresh_btn = gr.Button("Preise aktualisieren", variant="secondary", size="sm")
 
-                gr.Markdown("---")
-                gr.Markdown("### Verfuegbare Befehle")
+            gr.Markdown("---")
+            gr.Markdown("### Hinweise")
+            gr.Markdown("""
+            - Nach erfolgreicher Validierung erscheinen die Modelle im Dropdown auf dem Chat-Tab
+            - API Keys werden nur im Speicher gehalten (nicht gespeichert)
+            - Der aktuelle Provider aus der `.env` Datei ist immer verfügbar
+            - Validierung testet den Key mit einer kleinen Anfrage
+            - **Ollama** wird automatisch erkannt wenn es läuft (kein API Key nötig)
+            - **Preise** werden beim Start automatisch von LiteLLM geladen
+            """)
 
-                gr.Markdown("#### Nachrichten")
-                gr.Markdown("""
+        # === TUTORIAL ===
+        with gr.Column(visible=False) as tutorial_col:
+            gr.Markdown("### Anleitung")
+            gr.Markdown("Diese App ermoeglicht die sprachbasierte Interaktion mit Discord ueber einen MCP Server.")
+
+            gr.Markdown("---")
+            gr.Markdown("### Verfuegbare Befehle")
+
+            gr.Markdown("#### Nachrichten")
+            gr.Markdown("""
 | Funktion | Beispiel |
 |----------|----------|
 | Nachricht senden | "Sende Nachricht Hallo in allgemein" |
@@ -2120,10 +2131,10 @@ def create_interface():
 | Letzte Nachricht loeschen | "Loesche die letzte Nachricht in allgemein" |
 | Channel zusammenfassen | "Worum geht es im Channel allgemein?" oder "Fasse Channel zusammen" |
 | Channel zusammenfassen (mit Limit) | "Fasse die letzten 50 Nachrichten in general zusammen" |
-                """)
+            """)
 
-                gr.Markdown("#### Events")
-                gr.Markdown("""
+            gr.Markdown("#### Events")
+            gr.Markdown("""
 | Funktion | Beispiel |
 |----------|----------|
 | Event erstellen | "Erstelle Event Meeting morgen um 15 Uhr" |
@@ -2133,10 +2144,10 @@ def create_interface():
 | Events an bestimmtem Tag | "Welche Events sind am 15. Dezember?" |
 | Events morgen | "Welche Events sind morgen?" |
 | Event loeschen | "Loesche Event Meeting" |
-                """)
+            """)
 
-                gr.Markdown("#### Server und Mitglieder")
-                gr.Markdown("""
+            gr.Markdown("#### Server und Mitglieder")
+            gr.Markdown("""
 | Funktion | Beispiel |
 |----------|----------|
 | Server-Info | "Zeige Server-Informationen" |
@@ -2145,29 +2156,86 @@ def create_interface():
 | Nur Voice-Channels | "Welche Voice-Channels gibt es?" |
 | Online-Anzahl | "Wie viele User sind online?" |
 | Online-Mitglieder | "Wer ist aktuell online?" |
-                """)
+            """)
 
-                gr.Markdown("---")
-                gr.Markdown("### Tabs")
-                gr.Markdown("""
+            gr.Markdown("---")
+            gr.Markdown("### Tabs")
+            gr.Markdown("""
 | Tab | Beschreibung |
 |-----|--------------|
 | Chat | Sprach- oder Texteingabe fuer Discord-Befehle |
 | Kalender | Monatsuebersicht aller Discord-Events |
 | Einstellungen | LLM-Provider und API-Keys konfigurieren |
 | Tutorial | Diese Anleitung |
-                """)
+            """)
 
-                gr.Markdown("---")
-                gr.Markdown("### Technische Hinweise")
-                gr.Markdown("""
+            gr.Markdown("---")
+            gr.Markdown("### Technische Hinweise")
+            gr.Markdown("""
 - Die App nutzt das Model Context Protocol (MCP) zur Discord-Kommunikation
 - Unterstuetzte LLM-Provider: OpenAI, Groq, Google Gemini, Ollama (lokal)
 - Speech-to-Text: Groq Whisper API oder Faster Whisper (lokal)
 - Bot-Token und Guild-ID muessen in der .env Datei konfiguriert sein
-                """)
+            """)
 
         # === EVENT HANDLERS ===
+
+        def _set_tab(tab_name: str):
+            is_chat = tab_name == "chat"
+            is_calendar = tab_name == "calendar"
+            is_settings = tab_name == "settings"
+            is_tutorial = tab_name == "tutorial"
+            return (
+                gr.update(visible=is_chat),
+                gr.update(visible=is_calendar),
+                gr.update(visible=is_settings),
+                gr.update(visible=is_tutorial),
+                gr.update(variant="primary" if is_chat else "secondary"),
+                gr.update(variant="primary" if is_calendar else "secondary"),
+                gr.update(variant="primary" if is_settings else "secondary"),
+                gr.update(variant="primary" if is_tutorial else "secondary"),
+                tab_name
+            )
+
+        nav_chat.click(
+            fn=lambda: _set_tab("chat"),
+            inputs=[],
+            outputs=[
+                chat_col, calendar_col, settings_col, tutorial_col,
+                nav_chat, nav_calendar, nav_settings, nav_tutorial,
+                current_tab
+            ]
+        )
+
+        nav_calendar.click(
+            fn=lambda: _set_tab("calendar"),
+            inputs=[],
+            outputs=[
+                chat_col, calendar_col, settings_col, tutorial_col,
+                nav_chat, nav_calendar, nav_settings, nav_tutorial,
+                current_tab
+            ]
+        )
+
+        nav_settings.click(
+            fn=lambda: _set_tab("settings"),
+            inputs=[],
+            outputs=[
+                chat_col, calendar_col, settings_col, tutorial_col,
+                nav_chat, nav_calendar, nav_settings, nav_tutorial,
+                current_tab
+            ]
+        )
+
+        nav_tutorial.click(
+            fn=lambda: _set_tab("tutorial"),
+            inputs=[],
+            outputs=[
+                chat_col, calendar_col, settings_col, tutorial_col,
+                nav_chat, nav_calendar, nav_settings, nav_tutorial,
+                current_tab
+            ]
+        )
 
         # Chat-Events
         audio_input.change(

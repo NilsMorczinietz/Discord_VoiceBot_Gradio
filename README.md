@@ -31,7 +31,7 @@ This repository contains a major update compared to the original version. Key ch
 
 ```bash
 # Create virtual environment
-python -m venv venv
+python3.12 -m venv .venv
 venv\Scripts\activate  # Windows
 
 # Install dependencies
